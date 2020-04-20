@@ -1,0 +1,99 @@
+---
+title: "Ex-09 - Shortest Path with time Constratints"
+author: "Maximiliano Correa Pietrobon"
+output: html_document
+---
+# Definicion del Problema
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+```
+
+```{python ImportPyLibraries}
+import numpy as np
+from scipy.optimize import linprog
+```
+## Defino Funcion Matriz NodoNodo a NodoArco
+```{python Fc_NN2NA}
+def nn2na (NN):
+  #get every location where exist an arc:
+  idxs = np.argwhere(NN)
+  #idxs <-retorna un vector c con las posiciones ij con todos los arcos [(i1,j1),(i2,j2),etc]
+  #Preallocate NA matrix, dimension is (nodes, arcs)
+  NA = np.zeros([NN.shape[0],idxs.shape[0]]).astype(int)
+  # Dimension de NA : Filas = dim NN (cantidad de nodos), COL= dim idxs (cantidad de arcos)
+  
+  #loop in every arc, complete from (1) to (-1)
+  for i, arc in enumerate (idxs):
+    NA[arc[0],i] = 1 #from
+    NA[arc[1],i] = -1 #to
+    
+  #arc_idxs = [(arc[0], arc[1])] for arc in idxs]
+  
+  return NA
+```
+## Detallo el Modelo en terminos de Inv Operativa
+```{python ModeloPL}
+#Vector de costos
+C = np.array([2,1,2,5,2,1,2])
+
+#Restricciones
+#1: Distancia <- Shortest Path Matriz Nodo-Nodo
+
+##Matriz "A" con restricciones de Igual
+NN = np.array ([[0,1,1,0,0,0],
+                [0,0,0,1,0,1],
+                [0,0,0,0,1,0],
+                [0,0,0,0,0,1],
+                [0,0,0,0,0,1],
+                [0,0,0,0,0,0]])
+
+Aeq = nn2na(NN)
+
+## Vector de Terminos independientes
+beq = np.array([1,0,0,0,0,-1])
+
+#2: Tiempo T1<=9 y T2<=8
+
+## Matriz A con Restriccion de menor
+Aub = np.array ([[3,1,3,1,3,3,5]])
+
+## Terminos independientes
+bub = np.array([9,8])
+print(bub[0])
+#bub_2 = 8
+
+#Cotas
+bounds = tuple ([(0,None) for i in range (0, Aeq.shape[1])])
+
+print ('## inputs del optimizador ## \n'
+       'Vector de Costos: %s \n'
+       'A_eq Matriz Nodo-Arco: %s \n'
+       'b_eq Vector b: %s \n'
+       'Bounds of each X arc variable: %s \n' % (C,Aeq, beq,bounds))
+
+```
+
+## Resuelvo Modelo Utilizando "simplex"
+```{python Run-Optimizador, warning=FALSE}
+for i in range(0,2):
+  SP = linprog(C,A_eq=Aeq, b_eq=beq,A_ub=Aub,b_ub=bub[i],bounds=bounds,method='simplex')
+  print('Situacion Camino mas corto y tiempo menor a %s' % bub[i])
+  print('Vector de Soluciones: %s' % SP.x)
+  print('Valor optimo: %s'% SP.fun)
+  print('Holgura de Tiempo Diponible: %s' % SP.slack)
+  print('##########')
+
+```
+# Respuestas
+1) El camino mas corto desde el nodo S al T son los vertices s->3->5-t.  
+Con el agregado de la resticcion de tiempo <=9 la solucion sigue siendo la misma y el valor de T es 9 (1+3+5).  
+Como se puede ver la variable no tiene holgura (Slack) por lo tanto se esta utilizando todo el tiempo disponible.  
+Para el **camino mas corto**, el tiempo no puede ser menor que 9.  
+2) Dado (1) Cuando se restringe el tiempo en 1 unidad, se podria esperar una solucion no factible.  
+No Obstante, el solver linprog de Python asumio a las variables de decision como variables continuas y partio el entero en 2(1/5 y 4/5).
+A cada fraccion le asigno un camino: 1/5 (s->2-t) y el resto (4/5) lo asigno al trayecto (s->3->5-t).  
+De esta manera, el solver se las ingenio para que el flujo se transporte en T=8.  
+3) Este problema no puede ser resuelto con variables continuas, por lo cual habria que especificar que las variables de decision son binarias y resolverlo por programacion mixta. Siendo ese el caso, el resultado seria el mismo que en 1.
+Otra forma de resolverlo seria eliminar la restriccion de que la distancia sea minima.  
+La solucion 2 no es factible. En la practica y si pienso que el arco "X2t" es una autopista y que por eso se tarda menos a pesar de recorrer mas km se podria tomar la decision de aumentar el costo del transporte (nafta,peajes) de manera tal de ahorrar tiempo (T valdria 4)
