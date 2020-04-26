@@ -1,0 +1,128 @@
+---
+title: "Ex-11 - Shortest Path with time Constratints: Subgradient Method"
+author: "Alberto Maximiliano Correa Pietrobon"
+output: html_document
+---
+# Definicion del Problema
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+```
+
+```{python ImportPyLibraries, echo=TRUE}
+import numpy as np
+import pandas as pd
+import math
+from scipy.optimize import linprog
+```
+
+## Definicion de Funcion Matriz NodoNodo a NodoArco
+```{python Fc_NN2NA}
+def nn2na (NN):
+  #get every location where exist an arc:
+  idxs = np.argwhere(NN)
+  NA = np.zeros([NN.shape[0],idxs.shape[0]]).astype(int)
+  # Dimension de NA : Filas = dim NN (cantidad de nodos), COL= dim idxs (cantidad de arcos)
+  
+  #loop in every arc, complete from (1) to (-1)
+  for i, arc in enumerate (idxs):
+    NA[arc[0],i] = 1 #from
+    NA[arc[1],i] = -1 #to
+    
+  return NA
+```
+
+## Especificacion y Desarrollo del Modelo en terminos de Inv Operativa(min ~CX)
+```{python DF}
+# Definicion de Dataframe de Salida
+DF_P=pd.DataFrame(columns = ["V_Solucion","Optimo","Coef_Final","Lambda", "LambdaT","Lagrange"])
+print(DF_P)
+```
+
+```{python ModeloPL, warning = FALSE}
+## Parametros de inicio
+Tol=0.001
+print(Tol)
+Ld_A=0
+Ld_P=0
+print(Ld_A)
+print(Ld_P)
+diff=math.inf
+#diff=5
+print(diff)
+step=1
+print(step)
+```
+
+```{python}
+## Vector de costos CS
+#Ld = r.VLd
+CA = np.array([2,1,2,5,2,1,2])
+t = np.array([3,1,3,1,3,3,5])
+TR = 8
+
+## Matriz "A" con restricciones de Igual
+NN = np.array ([[0,1,1,0,0,0],
+                [0,0,0,1,0,1],
+                [0,0,0,0,1,0],
+                [0,0,0,0,0,1],
+                [0,0,0,0,0,1],
+                [0,0,0,0,0,0]])
+
+Aeq = nn2na(NN)
+#print(Aeq)
+
+## Vector de Terminos independientes
+beq = np.array([1,0,0,0,0,-1])
+#print(beq)
+
+#Cotas
+bounds = tuple ([(0,None) for i in range (0, Aeq.shape[1])])
+
+```
+
+```{python}
+while diff > Tol: 
+  C = CA + Ld_A*t
+  print('Coeficiente Final % s' % C)
+  SP = linprog(C,A_eq=Aeq, b_eq=beq,bounds=bounds, method='simplex')
+  print('Vector Solucion %s' % SP.x)
+  print('Valor Optimo %s' % SP.fun)
+
+  LagrangeT = Ld_A*TR
+  print('Lambda %s' % LagrangeT)
+  LagrangeF = SP.fun - Ld_A*TR 
+  print('Lagrange %s' % LagrangeF)
+  gradLd_A = t.dot(SP.x) - TR
+  print('Gradiente de Lagrange %s' % gradLd_A)
+  step = 1/gradLd_A
+  print('Paso %s' % step)
+  Ld_P= Ld_A + step*gradLd_A
+  print('Proximo paso %s' % Ld_P)
+  #DF_P = DF_P.append(pd.Series([SP.x,SP.fun,C,Ld_A,LagrangeT,LagrangeF], index=DF_P.columns ), ignore_index=True)
+  diff = Ld_P-Ld_A
+  print('Diferencia %s' % diff)
+  Ld_A=Ld_P
+  print('+++')
+```
+
+```{python}
+i =10 
+while i > 6:
+  print(i)
+  i -= 1
+```
+
+## Presentacion de Resultados
+```{r Rdos, warning=FALSE}
+R_df<-py$DF_P
+#R_df$V_Solucion<-as.vector(R_df$V_Solucion)
+#print(R_df$V_Solucion)
+#typeof(R_df$Lagrange)
+print.data.frame(R_df)
+
+MaxLg<-max(R_df$Lagrange[])
+print(paste("Max Lagrange: ",MaxLg))
+
+plot(R_df$Lambda, R_df$Lagrange, main= "Fc de Lagange", xlab="Lambda", ylab="L(Lambda)", type="l", col="red")
+```
